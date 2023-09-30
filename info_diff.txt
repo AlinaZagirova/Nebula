@@ -1,0 +1,1207 @@
+diff --git a/Penger b/Penger
+index bb03f9a..749d742 160000
+--- a/Penger
++++ b/Penger
+@@ -1 +1 @@
+-Subproject commit bb03f9a8668a7de64a93ac1e350a2951802f48b4
++Subproject commit 749d7426c113780fe7aaa53aa1a9a2031462c305
+diff --git a/bot.py b/bot.py
+index 418f034..f3ab434 100644
+--- a/bot.py
++++ b/bot.py
+@@ -2,33 +2,15 @@ from Penger.penger import Penger, Accordance
+ import tgbotSettings as tS
+ 
+ from time import sleep
+-import logging
+ 
+ from utils import UserStatuses, interlocutor
+-
++from utils import Task
+ 
+ # parcipantList = ["some_id"]
+ 
+ p = Penger(token = tS.token)
+-p.senderWhitelist.append("test")
+ usersDB = None
+-tasksDB = None
+-solutionsDB = None
+-
+-#
+-# Create a logger for the bot
+-#
+-
+-formatter = logging.Formatter('[%(asctime)s]# %(levelname)-8s %(name)s: %(message)s')
+-
+-handler = logging.FileHandler("bot.log")
+-handler.setFormatter(formatter)
+-
+-log = logging.getLogger("Bot")
+-log.setLevel(logging.INFO)
+-log.addHandler(handler)
+-
+-log.info('Hello!')
++taskDB = None
+ 
+ 
+ def isParcipant(tg_id):
+@@ -48,120 +30,13 @@ def isRegistrationEnabled():
+ 	return True
+ 
+ 
+-def getUserStatusAsMessage(user):
+-	userStatus = user.getStatus()
+-	message = ""
+-
+-	message += interlocutor.me_command['status'][0]
+-
+-	if userStatus == UserStatuses.READY:
+-		message += interlocutor.status['ready'][0]
+-	elif userStatus == UserStatuses.SENDS_NAME:
+-		message += interlocutor.status['sends_name'][0]
+-	elif userStatus == UserStatuses.SENDS_ANSWER:
+-		message += interlocutor.status['sends_answer'][0]
+-		message += str(user.getTaskID())
+-	elif userStatus == UserStatuses.SENDS_TASKID:
+-		message += interlocutor.status['sends_taskid'][0]
+-	else:
+-		message += "Status not defined"
+-
+-	return message
+-
+-
+-def printTask(task, user):
+-	message = ""
+-
+-	# print('solutions', solutionsDB.isThereSolution(user, task))
+-
+-	if not solutionsDB.isSolvedTaskByUser(user, task):
+-		message += task.getTaskAsMessage()
+-
+-		user.changeStatus(UserStatuses.SENDS_ANSWER)
+-		user.changeTaskID(task.getID())
+-		usersDB.updateUser(user)
+-	else:
+-		# message += "You have already answered this task"
+-
+-		message += interlocutor.task_presentation["already_answer"][0]
+-		message += str(task.getID())
+-		message += interlocutor.task_presentation["already_answer_1"][0]
+-
+-		user.changeStatus(UserStatuses.READY)
+-		usersDB.updateUser(user)
+-
+-	return message
+-
+-
+-def answer_stop(user):
+-	message = interlocutor.others['answer_stop'][0]
+-
+-	user.changeStatus(UserStatuses.READY)
+-	usersDB.updateUser(user)
+-	
+-	return message
+-
+-
+-def processUserAnswer(vAnswer, user):
+-	message = ''
+-
+-	task = tasksDB.getTaskById(user.getTaskID())
+-
+-	if task is None:
+-		message = "This task no longer exists :-("
+-	else:
+-		isCorrect, points = task.processAnswer(vAnswer)
+-		tasksDB.updateCurrentCoastForTask(task)
+-
+-		user.addPoints(points)
+-		user.changeStatus(UserStatuses.READY)
+-		usersDB.updateUser(user)
+-
+-		solutionsDB.createAndAddNewSolution(user.getID(), task.getID(),
+-			points, isCorrect)
+-
+-		message += interlocutor.task_answer['start'][0]
+-		message += str(task.getID()) + "\n\n"
+-
+-
+-		if isCorrect:
+-			message += interlocutor.task_answer['ok'][0]
+-		else:
+-			message += interlocutor.task_answer['not_ok'][0]
+-
+-		message += interlocutor.task_answer['points'][0]
+-		message += str(points)
+-
+-	return message
+-
+-
+-def taskIDEnter(text, user):
+-	botAnswer = ''
+-
+-	taskID = interlocutor.getTaskIDFromText(text)
+-
+-	if taskID is None:
+-		botAnswer = 'Error: Invalid link or parameter.'
+-	else:
+-		task = tasksDB.getTaskById(taskID)
+-		if task is None:
+-			botAnswer = 'Ahaha, 404 Error: Task not found.'
+-		else:
+-			botAnswer = printTask(task, user)
+-
+-	return botAnswer
+-
+-
+ def registerNewUser(tg_id):
+-	log.info("Registering a new participant (tg-" + str(tg_id) + ")")
+-
+ 	p.sendMessage(tg_id, interlocutor.registration['hello'][0])
+ 	sleep(0.1)
+ 
+ 	p.sendMessage(tg_id, "Registration...")
+ 	sleep(0.1)
+ 	user = usersDB.createAndAddNewUser(tg_id)
+-	p.senderWhitelist.append(tg_id)
+ 
+ 	print(user.dumpToDict())
+ 
+@@ -170,285 +45,114 @@ def registerNewUser(tg_id):
+ 	user.changeStatus(UserStatuses.SENDS_NAME)
+ 	usersDB.updateUser(user)
+ 
++	# p.senderWhitelist.append(tg_id)
+ 
+-def registrationClosed(tg_id):
+-	log.warning("Registration is closed for tg-" + str(tg_id))
+ 
++def registrationClosed(tg_id):
+ 	p.sendMessage(tg_id, "Hello!")
+ 
+ 
+-# def start_for_parcipant(tg_id):
+-# 	user = usersDB.getUserByTgId(tg_id)
+-# 	message = "Hello, "+user.getName()+"!\n\n"
+-# 	message += interlocutor.start_command["is_regitered"][0]
+-# 	p.sendMessage(user.tg_id, message)
+-
+-
+-def start_pCommand(self):
+-	tg_id = self.data["sender_id"]
+-
+-	log.info("Starting <start_p> for tg-" + str(tg_id))
+-
+-	if self.data['text'] == '/start':
+-		if isRegistrationEnabled():
+-			registerNewUser(tg_id)
+-		else:
+-			registrationClosed(tg_id)
++def start_for_parcipant(tg_id):
++	user = usersDB.getUserByTgId(tg_id)
++	p.sendMessage(user.tg_id, "Hello, "+user.getName()+"!")
+ 
+ 
+ def start_command(self):
+ 	tg_id = self.data["sender_id"]
+ 	user = getUser(tg_id)
+-
+-	log.info("Starting <start> for user-" + str(user.getID()))
+-	log.info("<start> ->> user-" + str(user.getID()) + " ->> " + str(self.data))
++	print(self.data)
+ 
+ 	command_arr = self.data['text'].split()
+ 
+ 	if len(command_arr) == 1:
+-		log.info("<start> ->> 'hello' for user-" + str(user.getID()))
+-
+-		message = "Hello, "+user.getName()+"!\n\n"
+-		message += interlocutor.start_command["is_regitered"][0]
+-		p.sendMessage(user.tg_id, message)
+-	else:
+-		if command_arr[1][:4] == "task":
+-			print("Parsing start message: ", command_arr[1])
+-
+-			taskID = interlocutor.getTaskIDFromStart(command_arr[1])
++		tg_id = self.data["sender_id"]
+ 
+-			log.info("<start> ->> task-" + str(taskID) + " for user-" + str(user.getID()))
+-
+-			if taskID is None:
+-				log.warning("<start> ->> Invalid task-" + str(taskID) + "; user-" + str(user.getID()))
+-				p.sendMessage(tg_id, 'Error: Invalid link or parameter.')
++		if user is None:
++			if isRegistrationEnabled():
++				registerNewUser(tg_id)
+ 			else:
+-				task = tasksDB.getTaskById(taskID)
+-				if task is None:
+-					log.warning("<start> ->> task-" + str(taskID) + " not found; user-" + str(user.getID()))
+-					p.sendMessage(tg_id, 'Ahaha, 404 Error: Task not found.')
+-				else:
+-					log.info("<start> ->> Send task-" + str(taskID) + " to user-" + str(user.getID()))
+-					response = printTask(task, user)
+-					p.sendMessage(tg_id, response)
+-
+-
+-			# print("Task ID:", taskID)
++				registrationClosed(tg_id)
++		else:
++			start_for_parcipant(tg_id)
++	else:
++		if command_arr[1][:4] == "task" and user is not None:
++			p.sendMessage(tg_id, 'This is task')
++			Task.getTaskNumberFromStart(start_message_argument=command_arr[1])
+ 		else:
+-			log.warning("<start> ->> Invalid parameter; user-" + str(user.getID()))
+ 			p.sendMessage(tg_id, 'I do not understand...')
+ 
+ 
+-def help_pCommand(self):
+-	tg_id = self.data["sender_id"]
+-
+-	log.info("Starting <help_p> for tg-" + str(tg_id))
+-
+-	p.sendMessageToChat(self.data, "This is help")
++def help_for_parcipant(user):
++	p.sendMessage(user.tg_id, interlocutor.help_text[0])
+ 
+ 
+ def help_command(self):
+ 	tg_id = self.data["sender_id"]
+ 	user = usersDB.getUserByTgId(tg_id)
+ 
+-	log.info("Starting <help> for user-" + str(user.getID()))
+-
+-	p.sendMessageToChat(self.data, interlocutor.help_text[0])
+-
+-
+-def score_command(self):
+-	tg_id = self.data["sender_id"]
+-	user = usersDB.getUserByTgId(tg_id)
+-
+-	log.info("Starting <score> for user-" + str(user.getID()))
+-
+-	message = ''
+-
+-	message += interlocutor.me_command['score'][0]
+-	message += str(user.getScore())
+-
+-	p.sendMessageToChat(self.data, message)
+-
+-
+-def me_command(self):
+-	tg_id = self.data["sender_id"]
+-	user = usersDB.getUserByTgId(tg_id)
+-
+-	log.info("Starting <me> for user-" + str(user.getID()))
+-
+-	message = ''
+-	
+-	message += interlocutor.me_command['start'][0]
+-
+-	message += interlocutor.me_command['name'][0]
+-	message += user.getName()
+-
+-	message += getUserStatusAsMessage(user)
+-
+-	message += interlocutor.me_command['score'][0]
+-	message += str(user.getScore())
+-
+-	message += interlocutor.me_command['task'][0]
+-	message += str(solutionsDB.getNumberOfSolvedSolutionByUser(user))
+-	message += interlocutor.me_command['task_1'][0]
+-	message += str(tasksDB.getNumberOfAll())
+-
+-	# message += interlocutor.me_command['task_2'][0]
+-
+-	# message += interlocutor.me_command['task_ok'][0]
+-	# message += str(solutionsDB.getNumberOfSolvedSolutionByUser(user))
+-
+-	# message += interlocutor.me_command['task_notok'][0]
+-	# message += str(solutionsDB.getNumberOfUnsolvedSolutionByUser(user))
+-
+-	p.sendMessageToChat(self.data, message)
+-
+-
+-def stats_command(self):
+-	tg_id = self.data["sender_id"]
+-	user = usersDB.getUserByTgId(tg_id)
+-
+-	log.info("Starting <stats> for user-" + str(user.getID()))
+-
+-	message = ''
+-
+-	message = "TOP-5 BY SCORE\n\n"
+-	message += "=========\n\n"
+-
+-	a = usersDB.top10byScoreDict()
+-	print(a)
+-
+-	if a is None:
+-		message += "There are no participants."
++	if user is not None:
++		help_for_parcipant(user)
+ 	else:
+-		for x in a.keys():
+-			u = usersDB.getUserById(x)
+-			message += u.getName() + ' ---> ' + str(a[x]) + '\n\n'
+-
+-	p.sendMessageToChat(self.data, message)
+-	sleep(0.1)
+-
+-	message = "TOP-5 BY CORRECT DECISIONS\n\n"
+-	message += "=========\n\n"
++		p.sendMessageToChat(self.data, "This is help")
+ 
+ 
++def score_for_parcipant(user):
++	p.sendMessage(user.tg_id, "This is score")
+ 
+ 
+-def task_command(self):
++def score_command(self):
+ 	tg_id = self.data["sender_id"]
+ 	user = usersDB.getUserByTgId(tg_id)
+ 
+-	log.info("Starting <task> for user-" + str(user.getID()))
+-
+-	message = ''
+-
+-	message = interlocutor.task_command["enter"][0]
+-
+-	user.changeStatus(UserStatuses.SENDS_TASKID)
+-	usersDB.updateUser(user)
+-
+-	p.sendMessageToChat(self.data, message)
++	if user is not None:
++		score_for_parcipant(user)
++	else:
++		p.sendMessageToChat(self.data, 'I do not understand...')
+ 
+ 
+-def empty_P(self):
+-	tg_id = self.data["sender_id"]
++def empty_for_parcipant(user, message):
++	print(message)
++	userStatus = user.getStatus()
+ 
+-	log.info("Starting <_empty_p> for tg-" + str(tg_id))
++	answer = "Status error.\nWrite to tech support - it's interesting."
+ 
+-	botAnswer = 'I do not understand...'
++	if userStatus == UserStatuses.READY:
++		answer = interlocutor.others["ready"][0]
++	elif userStatus == UserStatuses.SENDS_NAME:
++		user.changeName(interlocutor.get_validated_name(message))
++		user.changeStatus(UserStatuses.READY)
++		usersDB.updateUser(user)
++		answer = interlocutor.others["sends_name"][0]
+ 
+-	p.sendMessageToChat(self.data, botAnswer)
++	p.sendMessage(user.tg_id, answer)
++		
+ 
+ 
+ def empty(self):
+ 	tg_id = self.data["sender_id"]
+ 	user = usersDB.getUserByTgId(tg_id)
+ 
+-	log.info("Starting <_empty> for user-" + str(user.getID()))
+-
+-	message = self.data['text']
+-
+-	botAnswer = "This is <empty> for parcipant."
+-
+-	if len(message) > 0:
+-		if message[0] != "/":
+-
+-			print(message)
+-			userStatus = user.getStatus()
+-
+-			answer = "Status error.\nWrite to tech support - it's interesting."
+-
+-			if userStatus == UserStatuses.READY:
+-				answer = interlocutor.others["ready"][0]
+-
+-			elif userStatus == UserStatuses.SENDS_NAME:
+-				user.changeName(interlocutor.get_validated_name(message))
+-				user.changeStatus(UserStatuses.READY)
+-				usersDB.updateUser(user)
+-				answer = interlocutor.others["sends_name"][0]
+-
+-			elif userStatus == UserStatuses.SENDS_ANSWER:
+-				if message.replace(" ", '').lower() == interlocutor.stop_word:
+-					answer = answer_stop(user)
+-				else:
+-					message = interlocutor.get_validated_answer(message)
+-					answer = processUserAnswer(message, user)
+-
+-			elif userStatus == UserStatuses.SENDS_TASKID:
+-				answer = taskIDEnter(message, user)
+-
+-			botAnswer = answer
+-
+-	p.sendMessageToChat(self.data, botAnswer)
++	if user is not None:
++		empty_for_parcipant(user, self.data["text"])
++	else:
++		p.sendMessageToChat(self.data, 'I do not understand...')
+ 
+ 
+ p.accordance = [
+-	Accordance('/start', start_command, 'gWhitelist:all', enableArgument=True,
+-		ifNotAuthorized = Accordance('/start', start_pCommand, "all:all",
+-			enableArgument=True)
+-		),
+-	Accordance('/help', help_command, 'gWhitelist:all', enableArgument=True,
+-		ifNotAuthorized = Accordance('/help', help_pCommand, "all:all",
+-			enableArgument=True)
+-		),
+-	Accordance('/me', me_command, 'gWhitelist:all', enableArgument=True),
+-	Accordance('/score', score_command, 'gWhitelist:all', enableArgument=True),
+-	Accordance('/stats', stats_command, 'gWhitelist:all', enableArgument=True),
+-	# Accordance('/task', task_command, 'gWhitelist:all', enableArgument=True)
++	Accordance('/start', start_command, 'all:all', enableArgument=True),
++	Accordance('/help', help_command, 'all:all', enableArgument=True),
++	Accordance('/score', score_command, 'all:all', enableArgument=True)
+ ]
++p.emptyAccordance = Accordance('', empty, 'all:all', enableArgument=True)
+ 
+-p.emptyAccordance = Accordance('', empty, 'gWhitelist:all', enableArgument=True,
+-	ifNotAuthorized = Accordance('', empty_P, "all:all", enableArgument=True)
+-	)
+-
+-# print(type(p.accordance[0].ifNotAuthorized))
+-# print(type(p.accordance[0]))
+-# print(isinstance(p.accordance[0].ifNotAuthorized, Accordance))
+ 
+-
+-def main(u, t, s):
++def main(u):
+ 	global usersDB
+-	global tasksDB
+-	global solutionsDB
+ 	usersDB = u
+-	tasksDB = t
+-	solutionsDB = s
+-
+-	l = []
+-	for x in range(1, usersDB.getLastID()+1):
+-		_id = usersDB.getUserById(x).getTgID()
+-		l.append(int(_id))
+-
+-	print(l)
+-	import sys
+-	print(sys.getsizeof(l))
+-
+-	p.senderWhitelist.extend(l)
+ 
+ 	while True:
+ 		p.updateAndRespond()
+ 		sleep(10)
+-		print("senderWhitelist:", p.senderWhitelist)
+ 
+ 
+ # if __name__ == '__main__':
+diff --git a/run.py b/run.py
+index 551c8bb..f546035 100644
+--- a/run.py
++++ b/run.py
+@@ -1,22 +1,46 @@
+-from utils import UsersDB, TasksDB, SolutionsDB
++from utils import UsersDB
+ import bot
+ 
+ 
+-def run_bot(usersDB, tasksDB, solutionsDB):
+-	bot.main(usersDB, tasksDB, solutionsDB)
++def run_bot(usersDB):
++	bot.main(usersDB)
++
++
++def create_test_users(usersDB):
++	usersDB.createAndAddNewUser('123', 'qwerty')
++	usersDB.createAndAddNewUser('124')
++	usersDB.createAndAddNewUser('125', 'test')
++	usersDB.createAndAddNewUser('126', 'Steve')
+ 
+ 
+ def main():
+ 	usersDB = UsersDB()
+ 	usersDB.start()
+ 
+-	tasksDB = TasksDB()
+-	tasksDB.start()
++	# create_test_users(usersDB)
++
++	a = usersDB.getLastID()
++	print(a)
++
++	a = usersDB.getUserByTgId("123")
++
++	a.addPoints(50)
++	a.fname = 'Eliot'
++	a.changeName('eliot')
++	a.changeStatus(21)
++	usersDB.updateUser(a)
++
++	# if a is not None:
++	# 	print(a.dumpToDict())
++	# else:
++	# 	print(a)
++
++	# a = usersDB.isExistsID(5)
++	# print(a)
+ 
+-	solutionsDB = SolutionsDB()
+-	solutionsDB.start()
++	# usersDB._updateValue(4, 'score', '50')
+ 
+-	run_bot(usersDB, tasksDB, solutionsDB)
++	run_bot(usersDB)
+ 
+ 
+ if __name__ == '__main__':
+diff --git a/test_run.py b/test_run.py
+index 56feb9a..cb93e43 100644
+--- a/test_run.py
++++ b/test_run.py
+@@ -1,57 +1,16 @@
+-from utils import TasksDB, SolutionsDB, UsersDB
+-
+-
+-def create_test_users(usersDB):
+-	usersDB.createAndAddNewUser('123', 'qwerty')
+-	usersDB.createAndAddNewUser('124')
+-	usersDB.createAndAddNewUser('125', 'test')
+-	usersDB.createAndAddNewUser('126', 'Steve')
+-
+-def create_test_tasks(tasksDB):
+-	tasksDB.createAndAddNewTask("What is it?", "Linux", 1000)
+-	tasksDB.createAndAddNewTask("Who is it?", "Tux", 700)
+-	tasksDB.createAndAddNewTask("Where is it?", "Antarctica", 750)
+-	tasksDB.createAndAddNewTask("When is it?", "Now", 5000)
++from utils import TasksDB, SolutionsDB
+ 
+ 
+ def main():
+ 	tasksDB = TasksDB()
+ 	tasksDB.start()
+-	# tasksDB.createAndAddNewTask("What is it?", "Linux", 1000)
++	tasksDB.createAndAddNewTask("What is it?", "Linux", 1000)
+ 
+ 	solutionsDB = SolutionsDB()
+ 	solutionsDB.start()
+-	# solutionsDB.createAndAddNewSolution(1, 4, 1, True)
+-
+-	usersDB = UsersDB()
+-	usersDB.start()
+-
+-	# create_test_users(usersDB)
+-	# create_test_tasks(tasksDB)
+-
+-	# a = usersDB.getLastID()
+-	# print(a)
+-
+-	# a = usersDB.getUserByTgId("123")
+-
+-	# a.addPoints(50)
+-	# a.fname = 'Eliot'
+-	# a.changeName('eliot')
+-	# a.changeStatus(21)
+-	# usersDB.updateUser(a)
+-
+-	# if a is not None:
+-	# 	print(a.dumpToDict())
+-	# else:
+-	# 	print(a)
+-
+-	# a = usersDB.isExistsID(5)
+-	# print(a)
+-
+-	# usersDB._updateValue(4, 'score', '50')
++	solutionsDB.createAndAddNewSolution(1, 4, 1, True)
+ 
+-	# a = tasksDB.getTaskById(4)
+-	# u = usersDB.getUserById(6)
++	a = tasksDB.getTaskById(2)
+ 	# print(a.dumpToDict())
+ 
+ 	# print()
+@@ -62,49 +21,13 @@ def main():
+ 	# b = a.processAnswer('  lInUx  ')
+ 	# print(b)
+ 	# b = a.processAnswer('not linux')
+-	# b = a.getTaskAsMessage()
+-	# print(b)
+-	# print("---------------")
+-
+-	# a = solutionsDB.didUserAnswer(u, a)
++	b = a.getTaskAsMessage()
++	print(b)
+ 
+-	# print(a)
++	# print()
+ 
+ 	# print(a.dumpToDict())
+ 
+-	# t = tasksDB.getTaskById(4)
+-	# print(t.getCurrentCoast())
+-	# t.min_coast = 960
+-	# t.updateCurrentCoast()
+-	# t.updateCurrentCoast()
+-	# t.updateCurrentCoast()
+-	# t.updateCurrentCoast()
+-	# t.updateCurrentCoast()
+-	# t.updateCurrentCoast()
+-	# t.updateCurrentCoast()
+-	# print(t.getCurrentCoast())
+-	# tasksDB.updateCurrentCoastForTask(t)
+-
+-	a = usersDB.getUserById("5")
+-	t = tasksDB.getTaskById(4)
+-
+-	print(a.dumpToDict())
+-
+-	x = solutionsDB.getNumberOfSolutionByUser(a)
+-
+-	print("getNumberOfSolutionByUser", x)
+-	print("getNumberOfSolvedSolutionByUser", solutionsDB.getNumberOfSolvedSolutionByUser(a))
+-	print("getNumberOfUnsolvedSolutionByUser", solutionsDB.getNumberOfUnsolvedSolutionByUser(a))
+-
+-	print()
+-
+-	for x in range(11):
+-		t = tasksDB.getTaskById(x+1)
+-		print(x+1, " | ", solutionsDB.isSolvedTaskByUser(a, t))
+-
+-	
+-
+-
+ 
+ 
+ if __name__ == '__main__':
+diff --git a/utils/SolutionsDB.py b/utils/SolutionsDB.py
+index f804f68..4d63e80 100644
+--- a/utils/SolutionsDB.py
++++ b/utils/SolutionsDB.py
+@@ -61,35 +61,22 @@ class SolutionsDB:
+ 		elif response[0] == ID:
+ 			return True
+ 
+-	def getSolutionsBy(self, request, value):
++	def getSolutionById(self, ID):
++		request = 'SELECT * FROM ' + self.mainTableName + ' WHERE id = ?'
++
+ 		cursor = self.conn.cursor()
+-		cursor.execute(request, value)
++		cursor.execute(request, (ID,))
+ 		response = cursor.fetchall()
+ 
+-		# print(response)
++		print(response)
+ 
+ 		if len(response) == 0:
+-			return [None]
++			return None
+ 		else:
+ 			solutions = []
+ 			for solutionTuple in response:
+ 				solutions.append(createSolutionFromResponse(solutionTuple))
+-
+-			return solutions
+-
+-	def getSolutionById(self, ID):
+-		request = 'SELECT * FROM ' + self.mainTableName + ' WHERE id = ?'
+-
+-		return self.getSolutionsBy(request, (ID,))[0]
+-
+-	def getNumberOfSolutionBy(self, request, value):
+-		cursor = self.conn.cursor()
+-		cursor.execute(request, value)
+-		response = cursor.fetchone()
+-
+-		# print(response)
+-
+-		return response[0]
++			return solutions[0]
+ 
+ 	def createAndAddNewSolution(self, user_id, task_id, score=0, is_solved=True):
+ 		user_id = int(user_id)
+@@ -115,48 +102,3 @@ class SolutionsDB:
+ 
+ 		solution = self.getSolutionById(ID)
+ 		return solution
+-
+-	def isThereSolution(self, user, task):
+-		response = False
+-
+-		request = 'SELECT count(*) FROM solutions WHERE user_id=? AND task_id=?'
+-		numberOfSolutions = self.getNumberOfSolutionBy(request, (user.getID(), task.getID()))
+-
+-		print('user.getID(): ', user.getID())
+-		print('task.getID(): ', task.getID())
+-
+-		print('numberOfSolutions: ', numberOfSolutions)
+-
+-		if numberOfSolutions > 0:
+-			response = True
+-
+-		return response
+-
+-	def getNumberOfSolutionByUser(self, user):
+-		request = 'SELECT count(*) FROM solutions WHERE user_id=?'
+-		numberOfSolutions = self.getNumberOfSolutionBy(request, (user.getID(),))
+-
+-		return numberOfSolutions
+-
+-	def getNumberOfSolvedSolutionByUser(self, user):
+-		request = 'SELECT count(*) FROM solutions WHERE user_id=? AND is_solved=1'
+-		numberOfSolutions = self.getNumberOfSolutionBy(request, (user.getID(),))
+-
+-		return numberOfSolutions
+-
+-	def getNumberOfUnsolvedSolutionByUser(self, user):
+-		request = 'SELECT count(*) FROM solutions WHERE user_id=? AND is_solved=0'
+-		numberOfSolutions = self.getNumberOfSolutionBy(request, (user.getID(),))
+-
+-		return numberOfSolutions
+-
+-	def isSolvedTaskByUser(self, user, task):
+-		response = False
+-
+-		request = 'SELECT count(*) FROM solutions WHERE user_id=? AND task_id=? AND is_solved=1'
+-		numberOfSolutions = self.getNumberOfSolutionBy(request, (user.getID(), task.getID()))
+-
+-		if numberOfSolutions > 0:
+-			response = True
+-
+-		return response
+diff --git a/utils/Task.py b/utils/Task.py
+index 0e68833..6993d0e 100644
+--- a/utils/Task.py
++++ b/utils/Task.py
+@@ -1,9 +1,22 @@
+-from .interlocutor import task_presentation
++import re
++
++
++def getTaskNumberFromStart(start_message_argument):
++		message = start_message_argument
++		print("Parsing start message: ", message)
++
++		if re.match("^task_\\d{,3}$", message):
++			task_number = message[5:]
++			if task_number.isdigit():
++				task_number = int(task_number)
++				print("Task number: ", task_number)
++
+ 
+ class Task:
+ 	"""docstring for Task"""
+ 	def __init__(self, task, answer, coast, ID=None, current_coast=None,
+-			features=None, max_coast=None, min_coast=None):
++			features=None, max_coast=None, min_coast=None, id_solved=None,
++			id_unsolved=None):
+ 		self.ID = ID
+ 
+ 		self.task = task
+@@ -30,6 +43,12 @@ class Task:
+ 		else:
+ 			min_coast = int(min_coast)
+ 
++		if id_solved is None:
++			id_solved = []
++
++		if id_unsolved is None:
++			id_unsolved = []
++
+ 	def dumpToDict(self):
+ 		d = {}
+ 
+@@ -57,6 +76,12 @@ class Task:
+ 	def getCurrentCoast(self):
+ 		return self.current_coast
+ 
++	def addIDSolved(self, ID):
++		self.id_solved.append(ID)
++
++	def addIDUnsolved(self, ID):
++		self.id_unsolved.append(ID)
++
+ 	def isCorrectAnswer(self, _answer):
+ 		_answer = str(_answer)
+ 
+@@ -68,34 +93,11 @@ class Task:
+ 
+ 		return response
+ 
+-	def getTaskAsMessage(self, lang=0):
+-		message = task_presentation['start'][lang]
+-		message += str(self.ID) + task_presentation['start_1'][lang]
+-
+-		message += '> '
+-		message += self.task
+-		message += '\n\n'
+-
+-		# if "plain" in self.features:
+-		# 	message += task_presentation["answer_plain_abc"][lang]
+-
+-		message += task_presentation["answer_stop"][lang]
+-
+-		return message
+-
+-	def updateCurrentCoast(self):
+-		if (self.current_coast - 10) >= self.min_coast:
+-			self.current_coast = self.current_coast-10
+-
+-	def processAnswer(self, _answer):
+-		points = 0
+-		isCorrectAnswer = self.isCorrectAnswer(_answer)
+ 
+-		if isCorrectAnswer:
+-			points = self.getCurrentCoast()
+-			self.updateCurrentCoast()
++	def processAnswer(self, answer):
++		isCorrectAnswer = self.isCorrectAnswer(answer)
+ 
+-		print("Answer: ", _answer, "  Correct: ", isCorrectAnswer)
++		print("Answer: ", answer, "  Correct: ", isCorrectAnswer)
+ 
+-		return isCorrectAnswer, points
++		return isCorrectAnswer
+ 
+diff --git a/utils/TasksDB.py b/utils/TasksDB.py
+index 82a4ebd..9866f58 100644
+--- a/utils/TasksDB.py
++++ b/utils/TasksDB.py
+@@ -13,6 +13,8 @@ def createTaskFromResponse(response):
+ 	task.features = response[5]
+ 	task.max_coast = response[6]
+ 	task.min_coast = response[7]
++	task.id_solved = response[8]
++	task.id_unsolved = response[9]
+ 
+ 	return task
+ 
+@@ -94,7 +96,8 @@ class TasksDB:
+ 			return tasks[0]
+ 
+ 	def createAndAddNewTask(self, task, answer, coast,
+-			current_coast=None, features=None, max_coast=None, min_coast=None):
++			current_coast=None, features=None, max_coast=None, min_coast=None,
++			id_solved=None, id_unsolved=None):
+ 		task = str(task)
+ 		answer = str(answer)
+ 		coast = int(coast)
+@@ -119,16 +122,23 @@ class TasksDB:
+ 		else:
+ 			min_coast = int(min_coast)
+ 
++		if id_solved is None:
++			id_solved = []
++
++		if id_unsolved is None:
++			id_unsolved = []
++
++
+ 		ID = self.getLastID() + 1
+ 
+ 		data = (ID, task, answer, coast, current_coast, features, max_coast,
+-			min_coast)
++			min_coast, dumps(id_solved), dumps(id_unsolved))
+ 
+ 
+ 		request = 'INSERT INTO ' +  self.mainTableName + \
+ 					'(id, task, answer, coast, current_coast, features,' + \
+-					'max_coast, min_coast)' + \
+-					'VALUES(?, ?, ?, ?, ?, ?, ?, ?)'
++					'max_coast, min_coast, id_solved, id_unsolved)' + \
++					'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+ 
+ 		cursor = self.conn.cursor()
+ 		cursor.execute(request, data)
+@@ -137,20 +147,6 @@ class TasksDB:
+ 		task = self.getTaskById(ID)
+ 		return task
+ 
+-	def getNumberOfAll(self):
+-		request = 'SELECT count(*) FROM ' + self.mainTableName
+-
+-		cursor = self.conn.cursor()
+-		cursor.execute(request)
+-		response = cursor.fetchone()
+-
+-		return response[0]
+-
+-	def updateCurrentCoastForTask(self, task):
+-		request = 'UPDATE ' + self.mainTableName + ' SET current_coast = ?' + \
+-					' WHERE id = ?'
+-
+-		cursor = self.conn.cursor()
+-		cursor.execute(request, (task.getCurrentCoast(), task.getID()))
+-		self.commit()
++	def function(self):
++		pass
+ 
+diff --git a/utils/User.py b/utils/User.py
+index ccaa2b1..f5d67a6 100644
+--- a/utils/User.py
++++ b/utils/User.py
+@@ -5,7 +5,6 @@ class UserStatuses:
+ 	SENDS_FNAME = 22
+ 	SENDS_LNAME = 23
+ 	SENDS_ANSWER = 24
+-	SENDS_TASKID = 25
+ 
+ 
+ class User:
+@@ -31,9 +30,6 @@ class User:
+ 	def getID(self):
+ 		return self.ID
+ 
+-	def getTgID(self):
+-		return self.tg_id
+-
+ 	def dumpToDict(self):
+ 		d = {}
+ 
+@@ -56,9 +52,6 @@ class User:
+ 
+ 		return d
+ 
+-	def getScore(self):
+-		return self.score
+-
+ 	def addPoints(self, points, toMain=True):
+ 		# if str(points).isdigit():
+ 		# 	points = int(points)
+diff --git a/utils/UsersDB.py b/utils/UsersDB.py
+index c2839ab..c6dfcb0 100644
+--- a/utils/UsersDB.py
++++ b/utils/UsersDB.py
+@@ -132,7 +132,7 @@ class UsersDB:
+ 		self.commit()
+ 
+ 		user = self.getUserById(ID)
+-		return user
++		return user[0]
+ 
+ 	def _updateValue(self, ID, _valueName, newValue):
+ 		request = 'UPDATE ' + self.mainTableName + ' SET ' + _valueName + ' = ?' + \
+@@ -185,23 +185,3 @@ class UsersDB:
+ 
+ 		if existingUser.status != user.status:
+ 			self._updateValue(userID, 'status', user.status)
+-
+-	def top10byScoreDict(self):
+-		request = 'SELECT id, score FROM ' + self.mainTableName + ' ORDER BY score DESC LIMIT 5'
+-
+-		cursor = self.conn.cursor()
+-		cursor.execute(request)
+-		response = cursor.fetchall()
+-
+-		print(response)
+-
+-		if len(response) == 0:
+-			return None
+-		else:
+-			d = {}
+-
+-			# id: score
+-			for x in response:
+-				d[x[0]] = x[1]
+-
+-			return d
+diff --git a/utils/interlocutor.py b/utils/interlocutor.py
+index 6c48f30..bfe92ab 100644
+--- a/utils/interlocutor.py
++++ b/utils/interlocutor.py
+@@ -3,7 +3,6 @@ from .User import UserStatuses
+ 
+ maxLengthOfName = 32
+ maxLengthOfAnswer = 32
+-stop_word = "стоп"
+ 
+ langs = ('rus')
+ 
+@@ -26,12 +25,6 @@ registration = {
+ 	]
+ }
+ 
+-start_command = {
+-	"is_regitered": [
+-		"Ты уже зарегистрирован на QR-квест :-)\nМожешь приступать к выполнению тасков."
+-	]
+-}
+-
+ help_text = [
+ 	"Здесь описываются доступные тебе команды\n\n" + \
+ 	"-----\n\n" + \
+@@ -41,105 +34,27 @@ help_text = [
+ 	"Следующими командами ты можешь посмотреть различную информацию о себе и соревновании:\n\n" + \
+ 	"/me - вывод информации о тебе; вывод твоей статистики.\n\n" + \
+ 	"/score - вывод твоего текущего количества баллов.\n\n" + \
+-	"/stats - вывод общей статистики по соревнованию"
++	"/stats - вывод общей статистики по соревнованию\n\n\n" + \
++	"-----\n\n" + \
++	"Теперь о выполнении тасков.\n" + \
++	"При нахождении QR-кода, тебе понадобится его отсканировать." + \
++	"В нем будет зашита ссылка на этого бота с командой start." + \
++	"Но это будет не просто команда, а команда с аргументом.\n" + \
++	"Например, такая:\n\n" + \
++	"/start task_123\n\n" + \
++	"где 123 - это номер задания (целое число от 1 до 999).\n\n" + \
++	"Этот номер задания будет находиться под каждым QR-кодом.\n\n" + \
++	"Важно!!!\n\n"
++	"Если по какой-то причине отсканировать сам QR-код не получится, ты можешь самостоятельно написать боту номер задания для получения его текста.\n" + \
++	"Сделать это можно будет следующими способами:\n\n" + \
++	"1) Отправить боту команду команду:\n\n" + \
++	"/task\n\n" + \
++	"после чего бот спросит тебя номер задания. Помни, что номер задания - это число от 1 до 999. " + \
++	"Никаких лишних символов :-)\n\n" + \
++	"2) Отправить боту команду с аргументом (номером задания). Например:\n\n" + \
++	"/task 123"
+ ]
+ 
+-task_presentation = {
+-	"start": [
+-		"Таск №"
+-	],
+-	"start_1": [
+-		"\n\n\n"
+-	],
+-	"answer_start": [
+-		"\nОтправь "
+-	],
+-	"answer_plain_abc": [
+-		"слово.\n"
+-	],
+-	"answer_send": [
+-		"Чтобы ответить, отправь его мне"
+-	],
+-	"answer_stop": [
+-		'\n\n! Отправь слово "стоп", чтобы выйти из режима ответа'
+-	],
+-	"already_answer": [
+-		"Ты уже отвечал на этот таск (№"
+-	],
+-	"already_answer_1": [
+-		")\n\nПонимаю твое рвение отправить на него ответ еще раз,\nно увы - так нельзя. Программа такая."
+-	],
+-}
+-
+-task_answer = {
+-	"start": [
+-		"Я проверил твой ответ на таск №"
+-	],
+-	"ok": [
+-		"Отлично!\nТвой ответ сошелся с моими ожиданиями XD"
+-	],
+-	"not_ok": [
+-		"Увы...\n Здесь ты допустил ошибку :("
+-	],
+-	"points": [
+-		"\n\nЗа этот таск я тебе начисляю столько баллов:\n->      "
+-	]
+-}
+-
+-status = {
+-	"ready": [
+-		"Готов к решению тасков"
+-	],
+-	"sends_name": [
+-		"Отправляет свое имя"
+-	],
+-	"sends_answer": [
+-		"Отправляет ответ на таск №"
+-	],
+-	"sends_taskid": [
+-		"Отправляет номер таска"
+-	]
+-}
+-
+-me_command = {
+-	"start": [
+-		"Информация о тебе:\n\n"
+-	],
+-	"name": [
+-		"Для всех участников тебя зовут:\n-> "
+-	],
+-	"status": [
+-		"\n\nТвой текущий статус:\n-> "
+-	],
+-	"score": [
+-		"\n\nТвой текущий счет:\n-> "
+-	],
+-	"task": [
+-		"\n\nТы ответил на тасков:\n-> "
+-	],
+-	"task_1": [
+-		" из "
+-	],
+-	"task_2": [
+-		"\n\nИз них:"
+-	],
+-	"task_ok": [
+-		"\nПравильно: "
+-	],
+-	"task_notok": [
+-		"\nНеправильно: "
+-	],
+-	"rating": [
+-		""
+-	]
+-}
+-
+-task_command = {
+-	"enter": [
+-		"Введи номер таска:"
+-	]
+-}
+-
+ others = {
+ 	"ready": [
+ 		"Хмм.. Это мне пока трудно понять. Может быть когда-нибудь я научусь общаться не по программе..." + \
+@@ -152,9 +67,6 @@ others = {
+ 		"Или все таки Собеседник??\n\n" + \
+ 		"Хмм, не знаю... У меня одновременно и много имен, и имени нет.\n" + \
+ 		"Так и существую ;-)"
+-	],
+-	"answer_stop": [
+-		"Ок.\nНе волнуйся, ты сможешь снова вызвать этот таск и ответить на него тогда, когда тебе будет удобно."
+ 	]
+ }
+ 
+@@ -168,31 +80,3 @@ def get_validated_name(text):
+ 		return text[:maxLengthOfName]
+ 	else:
+ 		return text
+-
+-
+-def get_validated_answer(text):
+-	if len(text) > maxLengthOfAnswer: 
+-		return text[:maxLengthOfAnswer]
+-	else:
+-		return text
+-
+-
+-def getTaskIDFromText(text):
+-	response = None
+-	text = get_validated_answer(text)
+-
+-	if str(text).isdigit():
+-		response = int(text)
+-
+-	return response
+-
+-
+-def getTaskIDFromStart(start_message_argument):
+-		response = None
+-
+-		if re.match("^task_\\d{,4}$", start_message_argument):
+-			task_number = start_message_argument[5:]
+-			if task_number.isdigit():
+-				response = int(task_number)
+-
+-		return response
