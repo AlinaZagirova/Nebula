@@ -2,6 +2,12 @@ import cv2
 import dlib
 import numpy as np
 
+
+ # Вывод степени сходства
+    print(f'Процент схожести: {similarity:.2f}%')
+
+else:
+    print('Лицо не обнаружено на изображении.')
 # Загрузка изображений
 image = cv2.imread('test_image.jpg')  # Загрузите ваше изображение
 reference_image = cv2.imread('reference_image.jpg')  # Загрузите эталонное изображение
@@ -20,18 +26,9 @@ faces = detector(image)
 
 
 
-    # Преобразование ключевых точек в массивы numpy
-    landmarks_image = np.array([[p.x, p.y] for p in landmarks_image.parts()])
-    landmarks_reference = np.array([[p.x, p.y] for p in landmarks_reference.parts()])
+ 
 
-    # Вычисление степени сходства (например, среднего расстояния между ключевыми точками)
-    similarity = np.mean(np.linalg.norm(landmarks_image - landmarks_reference, axis=1))
-
-    # Вывод степени сходства
-    print(f'Процент схожести: {similarity:.2f}%')
-
-else:
-    print('Лицо не обнаружено на изображении.')
+   
 
 # Отображение изображений с выделенными ключевыми точками (для визуализации)
 cv2.imshow('Test Image', image)
